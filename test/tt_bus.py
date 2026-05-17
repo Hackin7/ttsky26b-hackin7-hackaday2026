@@ -48,4 +48,8 @@ async def run_step(dut, value: int, control: int = 0, settle_cycles: int = 32) -
 
 
 def read_loop_count_a(dut) -> int:
-    return int(dut.user_project.u_coprocessor.calc_num_loops_a.value)
+    """Read the internal counter. In GL simulation, hierarchy is flattened."""
+    try:
+        return int(dut.user_project.u_coprocessor.calc_num_loops_a.value)
+    except AttributeError:
+        return int(dut.user_project.calc_num_loops_a.value)
