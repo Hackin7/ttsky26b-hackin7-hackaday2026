@@ -882,7 +882,7 @@ module bitmap_rom (
 
   wire [7:0] row_off = ({y[5:0], 1'b0} + {y[5:0], 2'b00});
   wire [8:0] group = row_off + {6'b0, x[5:3]};
-  wire [10:0] base = {group, 1'b0} + {1'b0, group};
+  wire [9:0] base = {1'b0, group} + {group, 1'b0};
   wire [23:0] pix_word = {mem[base + 2], mem[base + 1], mem[base]};
   assign color_idx = pix_word[x[2:0] * 3 +: 3];
 
