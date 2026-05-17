@@ -67,8 +67,8 @@ module tt_um_hackin7_tbd (
   wire pixel_on = pixel_color != 3'd0;
 
   bitmap_rom rom1 (
-      .x(x[4:0]),
-      .y(y[4:0]),
+      .x(x[5:0]),
+      .y(y[5:0]),
       .color_idx(pixel_color)
   );
 

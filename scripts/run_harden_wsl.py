@@ -44,4 +44,4 @@ with open(path, "w", newline="\n") as f:
 os.chmod(path, 0o755)
 print(f"Wrote {path}, starting harden...")
 sys.stdout.flush()
-subprocess.check_call(["bash", path])
+subprocess.check_call(["sg", "docker", "-c", f"bash {path}"])

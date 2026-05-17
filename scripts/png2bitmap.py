@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-# 32x32 fits 1x1 tile with 3-bit colour (~384 byte ROM; 48x48 was ~155% util).
+# 32x32 on 1x1 (OpenLane measured 155.2% util at 48x48 on 1x1, run 25984904707).
 LOGO_SIZE = 32
 
 PALETTE = [
