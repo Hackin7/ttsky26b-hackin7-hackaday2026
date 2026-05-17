@@ -1,47 +1,54 @@
-# Sample testbench for a Tiny Tapeout project
+# Coprocessor simulation tests
 
-This is a sample testbench for a Tiny Tapeout project. It uses [cocotb](https://docs.cocotb.org/en/stable/) to drive the DUT and check the outputs.
-See below to get started or for more information, check the [website](https://tinytapeout.com/hdl/testing/).
+RTL tests use [cocotb](https://docs.cocotb.org/) + Icarus Verilog. The software golden model is in `golden_aoc.py`: after each step it applies `position = (position + value) % 100` and increments when the dial lands on `0`. That matches what `calc_num_loops_a` reports in simulation (not the separate wrap-count rules in `proto/1/sol_b.py`).
 
-## Setting up
+## Setup
 
-1. Edit [Makefile](Makefile) and modify `PROJECT_SOURCES` to point to your Verilog files.
-2. Edit [tb.v](tb.v) and replace `tt_um_example` with your module name.
-
-## How to run
-
-To run the RTL simulation:
-
-```sh
-make -B
+```bash
+cd test
+pip install -r requirements.txt
+# Linux / WSL / CI:
+sudo apt-get install -y iverilog
 ```
 
-To run gatelevel simulation, first harden your project and copy `../runs/wokwi/results/final/verilog/gl/{your_module_name}.v` to `gate_level_netlist.v`.
+## Run tests
 
-Then run:
-
-```sh
-make -B GATES=yes
+```bash
+make clean && make -B
 ```
 
-If you wish to save the waveform in VCD format instead of FST format, edit tb.v to use `$dumpfile("tb.vcd");` and then run:
+Pure-Python golden check (no simulator):
 
-```sh
-make -B FST=
+```bash
+python golden_aoc.py fixtures/input_sample.txt
+# prints: 3
 ```
 
-This will generate `tb.vcd` instead of `tb.fst`.
+## What is tested
 
-## How to view the waveform file
+`test_input_sample_matches_golden` drives `tt_um_hackin7_coprocessor` through the Tiny Tapeout pin protocol:
 
-Using GTKWave
+1. Reset, then three zero steps (pipeline priming, same as badge `solve.py`)
+2. Each line in `fixtures/input_sample.txt` as one 16-byte frame + COMPUTE pulse
+3. Two zero steps to drain the pipeline
+4. Compare `calc_num_loops_a` (part A, `control=0`) to `golden_aoc.expected_count()`
 
-```sh
+Full 32-bit result is read via hierarchy (`user_project.u_coprocessor.calc_num_loops_a`); `uo_out[7:1]` only exposes 7 bits on silicon.
+
+## Waveforms
+
+```bash
 gtkwave tb.fst tb.gtkw
+# or: surfer tb.fst
 ```
 
-Using Surfer
+VCD instead of FST: change `$dumpfile` in `tb.v` to `tb.vcd`, then `make -B FST=`.
 
-```sh
-surfer tb.fst
+## Gate-level (after harden)
+
+```bash
+export PDK_ROOT=~/ttsetup/pdk
+TOP=$(cd .. && ./tt/tt_tool.py --print-top-module)
+cp ../runs/wokwi/final/verilog/gl/${TOP}.v gate_level_netlist.v
+make clean && make -B GATES=yes
 ```
