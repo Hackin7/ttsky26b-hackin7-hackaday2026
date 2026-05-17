@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PIL import Image
 
-# 48x48 keeps the ROM small enough for a 1x1 tile (~864 bytes vs 6144 at 128x128).
-LOGO_SIZE = 48
+# 32x32 fits 1x1 tile with 3-bit colour (~384 byte ROM; 48x48 was ~155% util).
+LOGO_SIZE = 32
 
 PALETTE = [
     None,

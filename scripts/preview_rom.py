@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-SIZE = 48
+SIZE = 32
 ROOT = Path(__file__).resolve().parents[1]
 ROM = ROOT / "src" / "bitmap_rom.v"
 OUT = ROOT / "scripts" / "rom_preview.png"
