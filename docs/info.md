@@ -11,7 +11,7 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-A 640×480 VGA signal drives a TinyVGA PMOD. A 32×32 color bitmap ROM holds the backpack mascot (black cat, grey hat, brown pack, green bedroll, blue sweat drop, white details). It bounces around the screen on a black background. Tie `ui_in[0]` high to tile the logo, or `ui_in[1]` high to rotate palette indices on each wall bounce for a psychedelic effect.
+A 640×480 VGA signal drives a TinyVGA PMOD. A 24×24 color bitmap ROM holds the backpack mascot (black cat, grey hat, brown pack, green bedroll, blue sweat drop, white details). It bounces around the screen on a black background. Tie `ui_in[0]` high to tile the logo, or `ui_in[1]` high to rotate palette indices on each wall bounce for a psychedelic effect.
 
 ## How to test
 

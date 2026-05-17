@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PIL import Image
 
-# 32x32 on 1x1 (OpenLane measured 155.2% util at 48x48 on 1x1, run 25984904707).
-LOGO_SIZE = 32
+# 24x24 on 1x1 (32x32 measured 87.9% util but DPL/congestion fail on CI).
+LOGO_SIZE = 24
 
 PALETTE = [
     None,
@@ -86,6 +86,11 @@ def main() -> None:
         group_lines = [
             "  wire [7:0] row_off = ({y[5:0], 1'b0} + {y[5:0], 2'b00});",
             "  wire [8:0] group = row_off + {6'b0, x[5:3]};",
+        ]
+    elif groups_per_row == 3:
+        group_lines = [
+            f"  wire [{coord_bits + 1}:0] row_off = ({{y[{x_msb}:0], 1'b0}} + {{1'b0, y[{x_msb}:0]}});",
+            f"  wire [{g_bits - 1}:0] group = row_off + {{{coord_bits - 2}'b0, x[{x_grp_hi}:{x_grp_lo}]}};",
         ]
     else:
         group_lines = [
