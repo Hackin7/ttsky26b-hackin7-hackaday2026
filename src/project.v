@@ -1,15 +1,19 @@
 /*
- * Copyright (c) 2024 Tiny Tapeout LTD
- * SPDX-License-Identifier: Apache-2.0
+ * Tiny Tapeout wrapper for the Hardcaml AoC coprocessor (coprocessor.v unchanged).
+ *
+ * Load 16 bytes, pulse compute, read 32-bit result from the low word of dout.
+ *
+ * ui_in[0]  byte_strobe  - latch uio_in into din[byte_idx*8 +: 8], advance index
+ * ui_in[1]  compute      - pulse din_valid for one cycle (after 16 bytes loaded)
+ * ui_in[6:2] control[4:0]
+ * uio_in[7:0] data byte
+ *
+ * uo_out[7:0]  result[7:0] when dout_valid has been seen; uo_out[0] is dout_valid sticky
  */
 
 `default_nettype none
 
-parameter LOGO_SIZE = 24;
-parameter DISPLAY_WIDTH = 640;
-parameter DISPLAY_HEIGHT = 480;
-
-module tt_um_hackin7_tbd (
+module tt_um_hackin7_coprocessor (
     input  wire [7:0] ui_in,
     output wire [7:0] uo_out,
     input  wire [7:0] uio_in,
@@ -20,112 +24,62 @@ module tt_um_hackin7_tbd (
     input  wire       rst_n
 );
 
-  wire hsync;
-  wire vsync;
-  reg [1:0] R;
-  reg [1:0] G;
-  reg [1:0] B;
-  wire video_active;
-  wire [9:0] pix_x;
-  wire [9:0] pix_y;
+    wire rst = ~rst_n;
 
-  wire cfg_tile = ui_in[0];
-  wire cfg_cycle = ui_in[1];
+    wire        byte_strobe = ui_in[0];
+    wire        compute     = ui_in[1];
+    wire [4:0]  control     = ui_in[6:2];
 
-  assign uo_out  = {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]};
-  assign uio_out = 0;
-  assign uio_oe  = 0;
+    reg  [3:0]   byte_idx;
+    reg  [127:0] din_reg;
+    reg          din_valid;
+    wire [127:0] dout;
+    wire         dout_valid_cp;
 
-  wire _unused_ok = &{ena, ui_in[7:2], uio_in};
+    reg          result_valid;
+    reg  [31:0]  result_reg;
 
-  reg [9:0] prev_y;
+    always @(posedge clk) begin
+        if (rst) begin
+            byte_idx     <= 4'd0;
+            din_reg      <= 128'd0;
+            din_valid    <= 1'b0;
+            result_valid <= 1'b0;
+            result_reg   <= 32'd0;
+        end else begin
+            din_valid <= 1'b0;
 
-  hvsync_generator vga_sync_gen (
-      .clk(clk),
-      .reset(~rst_n),
-      .hsync(hsync),
-      .vsync(vsync),
-      .display_on(video_active),
-      .hpos(pix_x),
-      .vpos(pix_y)
-  );
+            if (byte_strobe) begin
+                din_reg[byte_idx * 8 +: 8] <= uio_in;
+                byte_idx <= byte_idx + 4'd1;
+            end
 
-  reg [9:0] logo_left;
-  reg [9:0] logo_top;
-  reg dir_x;
-  reg dir_y;
+            if (compute) begin
+                din_valid <= 1'b1;
+                byte_idx  <= 4'd0;
+            end
 
-  wire [2:0] pixel_color;
-  reg [2:0] bounce_shift;
-  wire [2:0] draw_color;
-  wire [5:0] color;
-
-  wire [9:0] x = pix_x - logo_left;
-  wire [9:0] y = pix_y - logo_top;
-  wire in_sprite = (x < LOGO_SIZE) && (y < LOGO_SIZE);
-  wire logo_pixels = cfg_tile | in_sprite;
-  wire pixel_on = pixel_color != 3'd0;
-
-  bitmap_rom rom1 (
-      .x(x[4:0]),
-      .y(y[4:0]),
-      .color_idx(pixel_color)
-  );
-
-  assign draw_color = cfg_cycle ? (pixel_color + bounce_shift) : pixel_color;
-
-  palette palette_inst (
-      .color_index(draw_color),
-      .rrggbb(color)
-  );
-
-  always @(posedge clk) begin
-    if (~rst_n) begin
-      R <= 0;
-      G <= 0;
-      B <= 0;
-    end else begin
-      R <= 0;
-      G <= 0;
-      B <= 0;
-      if (video_active && logo_pixels && pixel_on) begin
-        R <= color[5:4];
-        G <= color[3:2];
-        B <= color[1:0];
-      end
+            if (dout_valid_cp) begin
+                result_valid <= 1'b1;
+                result_reg   <= dout[31:0];
+            end
+        end
     end
-  end
 
-  always @(posedge clk) begin
-    if (~rst_n) begin
-      logo_left <= 308;
-      logo_top <= 228;
-      dir_y <= 0;
-      dir_x <= 1;
-      bounce_shift <= 0;
-    end else begin
-      prev_y <= pix_y;
-      if (pix_y == 0 && prev_y != pix_y) begin
-        logo_left <= logo_left + (dir_x ? 1 : -1);
-        logo_top  <= logo_top + (dir_y ? 1 : -1);
-        if (logo_left - 1 == 0 && !dir_x) begin
-          dir_x <= 1;
-          bounce_shift <= bounce_shift + 1;
-        end
-        if (logo_left + 1 == DISPLAY_WIDTH - LOGO_SIZE && dir_x) begin
-          dir_x <= 0;
-          bounce_shift <= bounce_shift + 1;
-        end
-        if (logo_top - 1 == 0 && !dir_y) begin
-          dir_y <= 1;
-          bounce_shift <= bounce_shift + 1;
-        end
-        if (logo_top + 1 == DISPLAY_HEIGHT - LOGO_SIZE && dir_y) begin
-          dir_y <= 0;
-          bounce_shift <= bounce_shift + 1;
-        end
-      end
-    end
-  end
+    coprocessor u_coprocessor (
+        .clk        (clk),
+        .rst        (rst),
+        .din        (din_reg),
+        .din_valid  (din_valid),
+        .control    (control),
+        .dout       (dout),
+        .dout_valid (dout_valid_cp)
+    );
+
+    assign uo_out   = {result_reg[6:0], result_valid};
+    assign uio_out  = 8'd0;
+    assign uio_oe   = 8'd0;
+
+    wire _unused = &{ena, dout[127:32], dout_valid_cp, 1'b0};
 
 endmodule
