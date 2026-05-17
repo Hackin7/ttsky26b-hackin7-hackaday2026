@@ -5,9 +5,9 @@ from pathlib import Path
 
 from PIL import Image
 
-SIZE = 128
+# 48x48 keeps the ROM small enough for a 1x1 tile (~864 bytes vs 6144 at 128x128).
+LOGO_SIZE = 48
 
-# Index 0 = transparent; 1-7 match palette.v
 PALETTE = [
     None,
     (0, 0, 0),
@@ -41,43 +41,69 @@ def main() -> None:
         src = root / "docs" / "Backpack.png"
     out = root / "src" / "bitmap_rom.v"
 
+    size = LOGO_SIZE
+    groups_per_row = size // 8
+    bytes_per_row = groups_per_row * 3
+
     img = Image.open(src).convert("RGBA")
     try:
         resample = Image.Resampling.LANCZOS
     except AttributeError:
         resample = Image.LANCZOS
-    img = img.resize((SIZE, SIZE), resample)
+    img = img.resize((size, size), resample)
 
     indices = []
-    for y in range(SIZE):
+    for y in range(size):
         row = []
-        for x in range(SIZE):
+        for x in range(size):
             row.append(nearest_index(*img.getpixel((x, y))))
         indices.append(row)
 
-    mem = [0] * (SIZE * 48)
-    for y in range(SIZE):
-        for gx in range(16):
+    mem = [0] * (size * bytes_per_row)
+    for y in range(size):
+        for gx in range(groups_per_row):
             packed = 0
             for px in range(8):
                 packed |= (indices[y][gx * 8 + px] & 7) << (px * 3)
-            base = y * 48 + gx * 3
+            base = y * bytes_per_row + gx * 3
             mem[base] = packed & 0xFF
             mem[base + 1] = (packed >> 8) & 0xFF
             mem[base + 2] = (packed >> 16) & 0xFF
+
+    coord_bits = (size - 1).bit_length()
+    x_msb = coord_bits - 1
+    x_grp_hi = x_msb
+    x_grp_lo = 3
+    max_group = size * groups_per_row - 1
+    base_bits = (max_group * 3 + 2).bit_length()
+    g_bits = (max_group).bit_length()
+
+    if groups_per_row == (1 << (coord_bits - 3)):
+        group_lines = [
+            f"  wire [{g_bits - 1}:0] group = {{y[{x_msb}:0], x[{x_grp_hi}:{x_grp_lo}]}};",
+        ]
+    elif groups_per_row == 6:
+        group_lines = [
+            "  wire [7:0] row_off = ({y[5:0], 1'b0} + {y[5:0], 2'b00});",
+            "  wire [8:0] group = row_off + {6'b0, x[5:3]};",
+        ]
+    else:
+        group_lines = [
+            f"  wire [{g_bits - 1}:0] group = y * {groups_per_row} + {{3'b0, x[2:0]}};",
+        ]
 
     lines = [
         "/*",
         " * Copyright (c) 2024 Tiny Tapeout LTD",
         " * SPDX-License-Identifier: Apache-2.0",
-        " * 3-bit color index per pixel, generated from Backpack.png",
+        f" * {size}x{size} 3-bit color bitmap from Backpack.png",
         " */",
         "",
         "`default_nettype none",
         "",
         "module bitmap_rom (",
-        "    input wire [6:0] x,",
-        "    input wire [6:0] y,",
+        f"    input wire [{coord_bits - 1}:0] x,",
+        f"    input wire [{coord_bits - 1}:0] y,",
         "    output wire [2:0] color_idx",
         ");",
         "",
@@ -86,11 +112,8 @@ def main() -> None:
     ]
     for i, val in enumerate(mem):
         lines.append(f"    mem[{i}] = 8'h{val:02x};")
-    lines += [
-        "  end",
-        "",
-        "  wire [10:0] group = {y[6:0], x[6:3]};",
-        "  wire [12:0] base = group + group + group;",
+    lines += ["  end", ""] + group_lines + [
+        f"  wire [{base_bits - 1}:0] base = {{group, 1'b0}} + {{1'b0, group}};",
         "  wire [23:0] pix_word = {mem[base + 2], mem[base + 1], mem[base]};",
         "  assign color_idx = pix_word[x[2:0] * 3 +: 3];",
         "",
@@ -99,7 +122,7 @@ def main() -> None:
     ]
     out.write_text("\n".join(lines), encoding="utf-8")
     colored = sum(sum(1 for v in row if v) for row in indices)
-    print(f"Wrote {out} ({colored} colored pixels, {len(mem)} bytes)")
+    print(f"Wrote {out} ({size}x{size}, {colored} colored pixels, {len(mem)} bytes)")
 
 
 if __name__ == "__main__":

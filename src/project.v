@@ -5,7 +5,7 @@
 
 `default_nettype none
 
-parameter LOGO_SIZE = 128;
+parameter LOGO_SIZE = 48;
 parameter DISPLAY_WIDTH = 640;
 parameter DISPLAY_HEIGHT = 480;
 
@@ -62,12 +62,13 @@ module tt_um_hackin7_tbd (
 
   wire [9:0] x = pix_x - logo_left;
   wire [9:0] y = pix_y - logo_top;
-  wire logo_pixels = cfg_tile || (x[9:7] == 0 && y[9:7] == 0);
+  wire in_sprite = (x < LOGO_SIZE) && (y < LOGO_SIZE);
+  wire logo_pixels = cfg_tile | in_sprite;
   wire pixel_on = pixel_color != 3'd0;
 
   bitmap_rom rom1 (
-      .x(x[6:0]),
-      .y(y[6:0]),
+      .x(x[5:0]),
+      .y(y[5:0]),
       .color_idx(pixel_color)
   );
 
@@ -97,8 +98,8 @@ module tt_um_hackin7_tbd (
 
   always @(posedge clk) begin
     if (~rst_n) begin
-      logo_left <= 200;
-      logo_top <= 200;
+      logo_left <= 296;
+      logo_top <= 216;
       dir_y <= 0;
       dir_x <= 1;
       bounce_shift <= 0;
