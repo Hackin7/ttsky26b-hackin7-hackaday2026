@@ -1,56 +1,48 @@
 # Tiny Tapeout project information
 project:
-  title:        "Hackin7"      # Project title
-  author:       "Hackin7"      # Your name
-  discord:      "Hackin7"      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  "to be confirmed"      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
+  title:        "Hackin7 Backpack VGA"
+  author:       "Hackin7"
+  discord:      "Hackin7"
+  description:  "Bouncing backpack logo VGA screensaver (640x480)"
+  language:     "Verilog"
+  clock_hz:     25175000
 
-  # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  tiles: "1x1"
 
-  # Your top module name must start with "tt_um_". Make it unique by including your github username:
   top_module:  "tt_um_hackin7_tbd"
 
-  # List your project's source files here.
-  # Source files must be in ./src and you must list each source file separately, one per line.
-  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
   source_files:
     - "project.v"
+    - "hvsync_generator.v"
+    - "palette.v"
+    - "bitmap_rom.v"
 
-# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
-# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
-  # Inputs
-  ui[0]: "q"
-  ui[1]: "w"
-  ui[2]: "e"
-  ui[3]: "r"
-  ui[4]: "t"
-  ui[5]: "y"
-  ui[6]: "u"
-  ui[7]: "i"
+  ui[0]: "tile"
+  ui[1]: "cycle"
+  ui[2]: ""
+  ui[3]: ""
+  ui[4]: ""
+  ui[5]: ""
+  ui[6]: ""
+  ui[7]: ""
 
-  # Outputs
-  uo[0]: "a"
-  uo[1]: "s"
-  uo[2]: "d"
-  uo[3]: "f"
-  uo[4]: "g"
-  uo[5]: "h"
-  uo[6]: "j"
-  uo[7]: "k"
+  uo[0]: "R1"
+  uo[1]: "G1"
+  uo[2]: "B1"
+  uo[3]: "VSync"
+  uo[4]: "R0"
+  uo[5]: "G0"
+  uo[6]: "B0"
+  uo[7]: "HSync"
 
-  # Bidirectional pins
-  uio[0]: "z"
-  uio[1]: "x"
-  uio[2]: "c"
-  uio[3]: "v"
-  uio[4]: "b"
-  uio[5]: "n"
-  uio[6]: "m"
-  uio[7]: "l"
+  uio[0]: ""
+  uio[1]: ""
+  uio[2]: ""
+  uio[3]: ""
+  uio[4]: ""
+  uio[5]: ""
+  uio[6]: ""
+  uio[7]: ""
 
-# Do not change!
 yaml_version: 6

@@ -7,15 +7,17 @@ You can also include images in this folder and reference them in the markdown. E
 512 kb in size, and the combined size of all images must be less than 1 MB.
 -->
 
+![Backpack logo](Backpack.png)
+
 ## How it works
 
-Explain how your project works. TODO: Fill
+A 640×480 VGA signal drives a TinyVGA PMOD. A 128×128 color bitmap ROM holds the backpack mascot (black cat, grey hat, brown pack, green bedroll, blue sweat drop, white details). It bounces around the screen on a black background. Tie `ui_in[0]` high to tile the logo, or `ui_in[1]` high to rotate palette indices on each wall bounce for a psychedelic effect.
 
 ## How to test
 
-Explain how to use your project.TODO: Fill
+Connect a TinyVGA PMOD to the chip outputs. Apply a ~25.175 MHz clock. Hold reset low briefly, then release. You should see the backpack logo bouncing on a VGA monitor.
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
-Most likely using VGA output
+- [TinyVGA PMOD](https://tinytapeout.com/vmod/) or equivalent VGA DAC PMOD
+- VGA monitor
