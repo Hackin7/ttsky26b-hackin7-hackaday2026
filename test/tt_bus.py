@@ -49,7 +49,14 @@ async def run_step(dut, value: int, control: int = 0, settle_cycles: int = 32) -
 
 def read_loop_count_a(dut) -> int:
     """Read the internal counter. In GL simulation, hierarchy is flattened."""
-    try:
-        return int(dut.user_project.u_coprocessor.calc_num_loops_a.value)
-    except AttributeError:
-        return int(dut.user_project.calc_num_loops_a.value)
+    # Try multiple paths for compatibility with RTL and GL (flattened) simulations
+    # result_reg is at the top level of the user module and is likely preserved in GL.
+    for signal in [
+        getattr(getattr(dut.user_project, "u_coprocessor", None), "calc_num_loops_a", None),
+        getattr(dut.user_project, "result_reg", None),
+        getattr(dut.user_project, "calc_num_loops_a", None),
+    ]:
+        if signal is not None:
+            return int(signal.value)
+
+    raise AttributeError("Could not find result register (calc_num_loops_a or result_reg) in hierarchy")
