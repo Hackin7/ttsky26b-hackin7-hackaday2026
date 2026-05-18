@@ -1,0 +1,7 @@
+*.bit
+*.json
+*.config
+*.svf
+*.vvp
+*.vcd
+tmp.v
