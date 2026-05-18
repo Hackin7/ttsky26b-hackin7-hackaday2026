@@ -142,21 +142,14 @@ module tb_adapter;
     endtask
 
     task automatic run_pair(input [127:0] frame, input [4:0] ctrl, input string msg);
-        // adp_dout[127:96] = last 4 bytes of UART frame (what solve.py reads as BE int)
-        // byte_sel 0 -> result_reg[7:0]  -> latched_dout[103:96]  (byte 12)
-        // byte_sel 3 -> result_reg[31:24] -> latched_dout[127:120] (byte 15)
-        // ref_result32 is assembled LE, adp comparison reconstructs LE from adp_dout BE slots
-        reg [31:0] adp_result_le;
+        // solve.py s[-4:] reads adp_dout[31:0] (UART sends [31:0] as last 4 wire bytes)
         begin
             ref_step(frame, ctrl);
             adapter_step(frame, ctrl);
             ref_read_result32();
-            // Reconstruct LE from BE placement in adp_dout bytes 12-15
-            adp_result_le = {adp_dout[127:120], adp_dout[119:112],
-                             adp_dout[111:104], adp_dout[103:96]};
-            if (ref_result32 !== adp_result_le) begin
+            if (ref_result32 !== adp_dout[31:0]) begin
                 $display("FAIL %s: ref=%0d adapter=%0d",
-                         msg, ref_result32, adp_result_le);
+                         msg, ref_result32, adp_dout[31:0]);
                 errors = errors + 1;
             end else
                 $display("PASS %s: result=%0d", msg, ref_result32);
@@ -197,13 +190,11 @@ module tb_adapter;
         repeat (64) @(posedge clk);
 
         expected_loops = 3;
-        // adp_dout[103:96] is byte 12 = result_reg[7:0]; for value 3 this equals 8'h03
-        if (adp_dout[103:96] !== 8'd3) begin
-            $display("FAIL AoC sample final: adp_dout BE bytes 12-15 = %h (expected 03000000)",
-                     adp_dout[127:96]);
+        if (adp_dout[31:0] !== 32'd3) begin
+            $display("FAIL AoC sample final: adp_dout[31:0]=%0d expected 3", adp_dout[31:0]);
             errors = errors + 1;
         end else
-            $display("PASS AoC sample final loops_a=%0d", adp_dout[103:96]);
+            $display("PASS AoC sample final loops_a=%0d", adp_dout[31:0]);
 
         // Host UART big-endian frame (write_int layout)
         rst = 1;

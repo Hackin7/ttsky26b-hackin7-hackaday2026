@@ -1,10 +1,8 @@
 // UART frame (128-bit din_valid pulse) to Tiny Tapeout tt_um_hackin7_coprocessor pin protocol.
 // Drop-in replacement for coprocessor in greymechaarny/src/top.v.
 //
-// After the settle phase the adapter reads the 32-bit result via the TT port read
-// protocol (ui_in[7]=1, ui_in[6:5]=byte_sel 0..3) and places the bytes into the
-// UART TX frame at the big-endian last-4-bytes position (bytes 12-15) so that
-// solve.py's read_int() (s[-4:]) reads the correct value unchanged.
+// After settle, reads 32-bit result via TT port (ui_in[7]=1, ui_in[6:5]=byte_sel).
+// Packs into latched_dout[31:0]; UART TX sends [127:120] first, [7:0] last (solve.py s[-4:]).
 
 `default_nettype none
 
@@ -130,9 +128,8 @@ module uart_tt_adapter (
                 S_READ_LATCH: begin
                     ui_in  <= 8'd0;
                     uio_in <= 8'd0;
-                    // Place byte into BE frame position 12+byte_sel so solve.py
-                    // s[-4:] reads the result correctly (bytes 12-15 big-endian).
-                    latched_dout[(12 + {2'b0, byte_i[1:0]}) * 8 +: 8] <= uo_out;
+                    // Pack LE into latched_dout[31:0]; UART TX sends [31:0] as last 4 wire bytes.
+                    latched_dout[{2'b0, byte_i[1:0]} * 8 +: 8] <= uo_out;
                     if (byte_i[1:0] == 2'd3)
                         state <= S_TX_PULSE;
                     else begin

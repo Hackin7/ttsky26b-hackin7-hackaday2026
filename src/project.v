@@ -86,7 +86,7 @@ module tt_um_hackin7_coprocessor (
     );
 
     assign uo_out   = result_read
-                      ? (result_valid ? result_reg[result_byte_sel * 8 +: 8] : 8'h00)
+                      ? (result_valid ? result_reg[result_byte_sel * 8 +: 8] : 8'hFF)
                       : {7'b0, result_valid};
     assign uio_out  = 8'd0;
     assign uio_oe   = 8'd0;
