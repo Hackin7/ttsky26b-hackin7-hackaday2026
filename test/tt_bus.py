@@ -54,26 +54,34 @@ def _try_int(signal) -> int | None:
         return None
 
 
+def read_result_from_uo(dut) -> int:
+    """Read result from chip pins: uo_out = {result[6:0], result_valid}. Counts must be < 128."""
+    uo = int(dut.uo_out.value)
+    if not (uo & 1):
+        raise RuntimeError("RESULT_VALID (uo_out[0]) is not set")
+    return (uo >> 1) & 0x7F
+
+
 def read_loop_count_a(dut) -> int:
-    """Read part-A loop counter (32-bit). Uses tb probes, then hierarchy, then uo_out."""
+    """Read part-A loop counter (32-bit). RTL: tb probes; GL: uo_out only."""
+    if hasattr(dut, "dbg_calc_num_loops_a"):
+        val = _try_int(dut.dbg_calc_num_loops_a)
+        if val is not None:
+            return val
+
     for path in (
-        lambda: dut.dbg_calc_num_loops_a,
-        lambda: dut.dbg_result_reg,
-        lambda: dut.user_project.u_coprocessor.calc_num_loops_a,
-        lambda: dut.user_project.result_reg,
+        lambda: getattr(dut, "dbg_result_reg", None),
+        lambda: getattr(getattr(dut.user_project, "u_coprocessor", None), "calc_num_loops_a", None),
+        lambda: getattr(dut.user_project, "result_reg", None),
     ):
         try:
-            val = _try_int(path())
+            sig = path()
+            if sig is None:
+                continue
+            val = _try_int(sig)
             if val is not None:
                 return val
         except AttributeError:
             continue
 
-    # Pin fallback: uo_out = {result_reg[6:0], result_valid} (valid for counts < 128)
-    uo = int(dut.uo_out.value)
-    if uo & 1:
-        return (uo >> 1) & 0x7F
-
-    raise AttributeError(
-        "Could not read loop count: add dbg_* probes in tb.v or assert RESULT_VALID on uo_out[0]"
-    )
+    return read_result_from_uo(dut)
