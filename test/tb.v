@@ -22,6 +22,11 @@ module tb ();
   wire [7:0] uo_out;
   wire [7:0] uio_out;
   wire [7:0] uio_oe;
+
+  // Simulation probes (not synthesized); cocotb reads these when hierarchy is opaque
+  wire [31:0] dbg_calc_num_loops_a;
+  wire [31:0] dbg_result_reg;
+
 `ifdef GL_TEST
   wire VPWR = 1'b1;
   wire VGND = 1'b0;
@@ -44,5 +49,8 @@ module tb ();
       .clk    (clk),      // clock
       .rst_n  (rst_n)     // not reset
   );
+
+  assign dbg_calc_num_loops_a = user_project.u_coprocessor.calc_num_loops_a;
+  assign dbg_result_reg      = user_project.result_reg;
 
 endmodule
