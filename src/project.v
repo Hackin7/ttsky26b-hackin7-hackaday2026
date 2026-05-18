@@ -1,14 +1,21 @@
 /*
  * Tiny Tapeout wrapper for the Hardcaml AoC coprocessor (coprocessor.v unchanged).
  *
- * Load 16 bytes, pulse compute, read 32-bit result from the low word of dout.
+ * Load 16 bytes, pulse compute, then read the full 32-bit result via 4-cycle port read.
  *
- * ui_in[0]  byte_strobe  - latch uio_in into din[byte_idx*8 +: 8], advance index
- * ui_in[1]  compute      - pulse din_valid for one cycle (after 16 bytes loaded)
- * ui_in[6:2] control[4:0]
+ * --- Load / compute phase (ui_in[7] = 0) ---
+ * ui_in[0]    byte_strobe  - latch uio_in into din[byte_idx*8 +: 8], advance index
+ * ui_in[1]    compute      - pulse din_valid for one cycle (after 16 bytes loaded)
+ * ui_in[6:2]  control[4:0]
  * uio_in[7:0] data byte
+ * uo_out[7:0] = {7'b0, result_valid}  (status only)
  *
- * uo_out[7:0]  result[7:0] when dout_valid has been seen; uo_out[0] is dout_valid sticky
+ * --- Result read phase (ui_in[7] = 1, ui_in[1:0] must be 0) ---
+ * ui_in[6:5]  byte_sel[1:0]  - selects byte of result_reg (0=LSB .. 3=MSB, little-endian)
+ * uo_out[7:0] = result_reg[byte_sel*8 +: 8] when result_valid, else 8'h00
+ *
+ * Read sequence: assert ui_in[7]=1 + byte_sel, wait one rising edge, sample uo_out,
+ * clear ui_in. Repeat for byte_sel 0..3 to assemble full 32-bit result.
  */
 
 `default_nettype none
@@ -26,9 +33,11 @@ module tt_um_hackin7_coprocessor (
 
     wire rst = ~rst_n;
 
-    wire        byte_strobe = ui_in[0];
-    wire        compute     = ui_in[1];
-    wire [4:0]  control     = ui_in[6:2];
+    wire        byte_strobe     = ui_in[0];
+    wire        compute         = ui_in[1];
+    wire [4:0]  control         = ui_in[6:2];
+    wire        result_read     = ui_in[7];
+    wire [1:0]  result_byte_sel = ui_in[6:5];
 
     reg  [3:0]   byte_idx;
     reg  [127:0] din_reg;
@@ -76,7 +85,9 @@ module tt_um_hackin7_coprocessor (
         .dout_valid (dout_valid_cp)
     );
 
-    assign uo_out   = {result_reg[6:0], result_valid};
+    assign uo_out   = result_read
+                      ? (result_valid ? result_reg[result_byte_sel * 8 +: 8] : 8'h00)
+                      : {7'b0, result_valid};
     assign uio_out  = 8'd0;
     assign uio_oe   = 8'd0;
 

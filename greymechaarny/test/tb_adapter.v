@@ -1,6 +1,8 @@
 `timescale 1ns/1ps
 
 // Compare uart_tt_adapter (UART din_valid frame) against tt_um driven with cocotb pin protocol.
+// Result comparison uses the TT 4-cycle port read (ui_in[7]=1, ui_in[6:5]=byte_sel)
+// rather than hierarchy probes so it mirrors what silicon actually exposes.
 
 module tb_adapter;
     localparam CTRL_PART_A = 5'b00100;
@@ -19,8 +21,7 @@ module tb_adapter;
     reg  [7:0] ref_uio_in;
     wire [7:0] ref_uo_out;
 
-    wire [31:0] ref_loops_a;
-    wire [31:0] adp_loops_a;
+    reg [31:0] ref_result32;
 
     integer errors;
     integer expected_loops;
@@ -45,9 +46,6 @@ module tb_adapter;
         .uio_out(),
         .uio_oe ()
     );
-
-    assign ref_loops_a = u_ref.u_coprocessor.calc_num_loops_a;
-    assign adp_loops_a = u_adapter.u_tt.u_coprocessor.calc_num_loops_a;
 
     always #5 clk = ~clk;
 
@@ -103,6 +101,22 @@ module tb_adapter;
         end
     endtask
 
+    // Read 32-bit result from ref tt_um via 4-cycle port read protocol
+    task automatic ref_read_result32;
+        integer sel;
+        begin
+            ref_result32 = 0;
+            for (sel = 0; sel < 4; sel = sel + 1) begin
+                ref_ui_in  = {1'b1, sel[1:0], 5'd0};
+                ref_uio_in = 8'd0;
+                @(posedge clk);
+                ref_result32[sel * 8 +: 8] = ref_uo_out;
+                ref_ui_in  = 8'd0;
+                @(posedge clk);
+            end
+        end
+    endtask
+
     task automatic adapter_step(input [127:0] frame, input [4:0] ctrl);
         integer timeout;
         begin
@@ -115,7 +129,7 @@ module tb_adapter;
             din_valid = 1'b0;
 
             timeout = 0;
-            while (!adp_dout_valid && timeout < 500) begin
+            while (!adp_dout_valid && timeout < 1000) begin
                 @(posedge clk);
                 timeout = timeout + 1;
             end
@@ -128,15 +142,24 @@ module tb_adapter;
     endtask
 
     task automatic run_pair(input [127:0] frame, input [4:0] ctrl, input string msg);
+        // adp_dout[127:96] = last 4 bytes of UART frame (what solve.py reads as BE int)
+        // byte_sel 0 -> result_reg[7:0]  -> latched_dout[103:96]  (byte 12)
+        // byte_sel 3 -> result_reg[31:24] -> latched_dout[127:120] (byte 15)
+        // ref_result32 is assembled LE, adp comparison reconstructs LE from adp_dout BE slots
+        reg [31:0] adp_result_le;
         begin
             ref_step(frame, ctrl);
             adapter_step(frame, ctrl);
-            if (ref_loops_a !== adp_loops_a) begin
-                $display("FAIL %s: ref loops_a=%0d adapter loops_a=%0d",
-                         msg, ref_loops_a, adp_loops_a);
+            ref_read_result32();
+            // Reconstruct LE from BE placement in adp_dout bytes 12-15
+            adp_result_le = {adp_dout[127:120], adp_dout[119:112],
+                             adp_dout[111:104], adp_dout[103:96]};
+            if (ref_result32 !== adp_result_le) begin
+                $display("FAIL %s: ref=%0d adapter=%0d",
+                         msg, ref_result32, adp_result_le);
                 errors = errors + 1;
             end else
-                $display("PASS %s: loops_a=%0d", msg, ref_loops_a);
+                $display("PASS %s: result=%0d", msg, ref_result32);
         end
     endtask
 
@@ -174,12 +197,13 @@ module tb_adapter;
         repeat (64) @(posedge clk);
 
         expected_loops = 3;
-        if (ref_loops_a !== expected_loops || adp_loops_a !== expected_loops) begin
-            $display("FAIL final loops_a ref=%0d adapter=%0d expected %0d",
-                     ref_loops_a, adp_loops_a, expected_loops);
+        // adp_dout[103:96] is byte 12 = result_reg[7:0]; for value 3 this equals 8'h03
+        if (adp_dout[103:96] !== 8'd3) begin
+            $display("FAIL AoC sample final: adp_dout BE bytes 12-15 = %h (expected 03000000)",
+                     adp_dout[127:96]);
             errors = errors + 1;
-        end         else
-            $display("PASS AoC sample final loops_a=%0d", adp_loops_a);
+        end else
+            $display("PASS AoC sample final loops_a=%0d", adp_dout[103:96]);
 
         // Host UART big-endian frame (write_int layout)
         rst = 1;

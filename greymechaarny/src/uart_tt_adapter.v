@@ -1,5 +1,10 @@
 // UART frame (128-bit din_valid pulse) to Tiny Tapeout tt_um_hackin7_coprocessor pin protocol.
 // Drop-in replacement for coprocessor in greymechaarny/src/top.v.
+//
+// After the settle phase the adapter reads the 32-bit result via the TT port read
+// protocol (ui_in[7]=1, ui_in[6:5]=byte_sel 0..3) and places the bytes into the
+// UART TX frame at the big-endian last-4-bytes position (bytes 12-15) so that
+// solve.py's read_int() (s[-4:]) reads the correct value unchanged.
 
 `default_nettype none
 
@@ -15,15 +20,17 @@ module uart_tt_adapter (
 
     localparam SETTLE_CYCLES = 64;
 
-    localparam S_IDLE        = 3'd0;
-    localparam S_STROBE_ON    = 3'd1;
-    localparam S_STROBE_OFF   = 3'd2;
-    localparam S_COMPUTE_ON   = 3'd3;
-    localparam S_COMPUTE_OFF  = 3'd4;
-    localparam S_SETTLE       = 3'd5;
-    localparam S_TX_PULSE     = 3'd6;
+    localparam S_IDLE        = 4'd0;
+    localparam S_STROBE_ON   = 4'd1;
+    localparam S_STROBE_OFF  = 4'd2;
+    localparam S_COMPUTE_ON  = 4'd3;
+    localparam S_COMPUTE_OFF = 4'd4;
+    localparam S_SETTLE      = 4'd5;
+    localparam S_READ        = 4'd6;   // assert ui_in[7]=1 + byte_sel for one clk
+    localparam S_READ_LATCH  = 4'd7;   // sample uo_out, advance byte_sel or go to TX
+    localparam S_TX_PULSE    = 4'd8;
 
-    reg [2:0]       state;
+    reg [3:0]       state;
     reg [3:0]       byte_i;
     reg [7:0]       settle_cnt;
     reg [127:0]     latched_din;
@@ -45,11 +52,6 @@ module uart_tt_adapter (
         .uio_out(),
         .uio_oe ()
     );
-
-    wire [127:0] cp_dout       = u_tt.u_coprocessor.dout;
-    wire         cp_dout_valid = u_tt.u_coprocessor.dout_valid;
-
-    wire _unused_uo = |uo_out;
 
     always @(posedge clk) begin
         dout_valid <= 1'b0;
@@ -111,10 +113,31 @@ module uart_tt_adapter (
                     ui_in  <= 8'd0;
                     uio_in <= 8'd0;
                     if (settle_cnt == 8'd0) begin
-                        latched_dout <= cp_dout;
-                        state        <= S_TX_PULSE;
+                        byte_i <= 4'd0;   // reuse byte_i as byte_sel for port read
+                        state  <= S_READ;
                     end else begin
                         settle_cnt <= settle_cnt - 8'd1;
+                    end
+                end
+
+                S_READ: begin
+                    // Assert ui_in[7]=1, ui_in[6:5]=byte_sel, rest 0
+                    ui_in  <= {1'b1, byte_i[1:0], 5'd0};
+                    uio_in <= 8'd0;
+                    state  <= S_READ_LATCH;
+                end
+
+                S_READ_LATCH: begin
+                    ui_in  <= 8'd0;
+                    uio_in <= 8'd0;
+                    // Place byte into BE frame position 12+byte_sel so solve.py
+                    // s[-4:] reads the result correctly (bytes 12-15 big-endian).
+                    latched_dout[(12 + {2'b0, byte_i[1:0]}) * 8 +: 8] <= uo_out;
+                    if (byte_i[1:0] == 2'd3)
+                        state <= S_TX_PULSE;
+                    else begin
+                        byte_i <= byte_i + 4'd1;
+                        state  <= S_READ;
                     end
                 end
 

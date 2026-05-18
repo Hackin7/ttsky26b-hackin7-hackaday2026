@@ -43,45 +43,41 @@ async def pulse_compute(dut, control: int = 0) -> None:
 async def run_step(dut, value: int, control: int = 0, settle_cycles: int = 32) -> None:
     await load_bytes(dut, pack_step(value))
     await pulse_compute(dut, control)
-    # Allow FSM to finish after din_valid (dout_valid is combinatorial with din_valid)
+    # Allow FSM to finish after din_valid
     await ClockCycles(dut.clk, settle_cycles)
 
 
-def _try_int(signal) -> int | None:
-    try:
-        return int(signal.value)
-    except (AttributeError, ValueError):
-        return None
+async def read_result_byte(dut, byte_sel: int) -> int:
+    """Drive result-read phase for one byte. byte_sel 0..3 (little-endian).
+
+    Asserts ui_in[7]=1 with ui_in[6:5]=byte_sel for one rising edge,
+    samples uo_out, then clears ui_in.
+    """
+    dut.ui_in.value = (1 << 7) | ((byte_sel & 3) << 5)
+    dut.uio_in.value = 0
+    await RisingEdge(dut.clk)
+    result = int(dut.uo_out.value)
+    dut.ui_in.value = 0
+    await RisingEdge(dut.clk)
+    return result
 
 
-def read_result_from_uo(dut) -> int:
-    """Read result from chip pins: uo_out = {result[6:0], result_valid}. Counts must be < 128."""
-    uo = int(dut.uo_out.value)
-    if not (uo & 1):
-        raise RuntimeError("RESULT_VALID (uo_out[0]) is not set")
-    return (uo >> 1) & 0x7F
+async def read_result32(dut) -> int:
+    """Read full 32-bit result_reg via 4-cycle uo_out port read.
+
+    Requires result_valid (uo_out[0] in idle mode) to be set first.
+    Assembles bytes little-endian: byte_sel 0 = LSB, 3 = MSB.
+    """
+    idle_uo = int(dut.uo_out.value)
+    if not (idle_uo & 1):
+        raise RuntimeError("result_valid not set (uo_out[0]=0); cannot read result")
+    val = 0
+    for sel in range(4):
+        b = await read_result_byte(dut, sel)
+        val |= (b & 0xFF) << (8 * sel)
+    return val
 
 
-def read_loop_count_a(dut) -> int:
-    """Read part-A loop counter (32-bit). RTL: tb probes; GL: uo_out only."""
-    if hasattr(dut, "dbg_calc_num_loops_a"):
-        val = _try_int(dut.dbg_calc_num_loops_a)
-        if val is not None:
-            return val
-
-    for path in (
-        lambda: getattr(dut, "dbg_result_reg", None),
-        lambda: getattr(getattr(dut.user_project, "u_coprocessor", None), "calc_num_loops_a", None),
-        lambda: getattr(dut.user_project, "result_reg", None),
-    ):
-        try:
-            sig = path()
-            if sig is None:
-                continue
-            val = _try_int(sig)
-            if val is not None:
-                return val
-        except AttributeError:
-            continue
-
-    return read_result_from_uo(dut)
+async def read_loop_count_a(dut) -> int:
+    """Read part-A loop counter via 4-cycle uo_out port read (works in RTL and GL)."""
+    return await read_result32(dut)

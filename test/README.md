@@ -33,7 +33,7 @@ python golden_aoc.py fixtures/input_sample.txt
 3. Two zero steps to drain the pipeline
 4. Compare `calc_num_loops_a` (part A, `control=0`) to `golden_aoc.expected_count()`
 
-Full 32-bit result is read via hierarchy (`user_project.u_coprocessor.calc_num_loops_a`); `uo_out[7:1]` only exposes 7 bits on silicon.
+Full 32-bit result is read via 4-cycle `uo_out` port read: host asserts `ui_in[7]=1` with `ui_in[6:5]=byte_sel` (0–3, little-endian) for one clock per byte, samples `uo_out`. Works identically in RTL and gate-level simulation (no hierarchy probes needed).
 
 ## Waveforms
 

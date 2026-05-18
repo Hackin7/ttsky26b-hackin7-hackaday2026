@@ -1,5 +1,6 @@
 `timescale 1ns/1ps
-// Replicate cocotb test.py stimulus on tt_um (must get loops_a == 3)
+// Replicate cocotb test.py stimulus on tt_um (must get loops_a == 3).
+// Result is read via the 4-cycle uo_out port read protocol (no hierarchy probes).
 
 module tb_cocotb_match;
     localparam CTRL_PART_A = 5'b00100;
@@ -15,7 +16,7 @@ module tb_cocotb_match;
         .uio_out(), .uio_oe()
     );
 
-    wire [31:0] loops_a = dut.u_coprocessor.calc_num_loops_a;
+    reg [31:0] port_result;
 
     always #5 clk = ~clk;
 
@@ -48,6 +49,22 @@ module tb_cocotb_match;
         end
     endtask
 
+    // Read 32-bit result via 4-cycle port read (ui_in[7]=1, ui_in[6:5]=byte_sel)
+    task read_result32;
+        integer sel;
+        begin
+            port_result = 0;
+            for (sel = 0; sel < 4; sel = sel + 1) begin
+                ui_in  = {1'b1, sel[1:0], 5'd0};
+                uio_in = 8'd0;
+                @(posedge clk);
+                port_result[sel * 8 +: 8] = uo_out;
+                ui_in = 8'd0;
+                @(posedge clk);
+            end
+        end
+    endtask
+
     initial begin
         integer i;
         clk = 0; rst_n = 0; ui_in = 0; uio_in = 0;
@@ -73,10 +90,11 @@ module tb_cocotb_match;
         run_step(0);
         repeat (64) @(posedge clk);
 
-        if (loops_a === 32'd3)
-            $display("PASS cocotb_match loops_a=3");
+        read_result32();
+        if (port_result === 32'd3)
+            $display("PASS cocotb_match port_result=3");
         else
-            $display("FAIL cocotb_match loops_a=%0d expected 3", loops_a);
+            $display("FAIL cocotb_match port_result=%0d expected 3", port_result);
 
         $finish;
     end

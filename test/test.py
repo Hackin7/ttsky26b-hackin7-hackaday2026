@@ -48,6 +48,6 @@ async def test_input_sample_matches_golden(dut):
 
     await ClockCycles(dut.clk, 64)
 
-    actual = read_loop_count_a(dut)
+    actual = await read_loop_count_a(dut)
     dut._log.info("RTL calc_num_loops_a=%d, golden=%d", actual, expected)
     assert actual == expected, f"RTL {actual} != golden {expected}"
