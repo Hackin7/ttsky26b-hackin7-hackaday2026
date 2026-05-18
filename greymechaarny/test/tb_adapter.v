@@ -6,6 +6,7 @@
 
 module tb_adapter;
     localparam CTRL_PART_A = 5'b00100;
+    localparam CTRL_PART_B = 5'b01100;
 
     reg clk;
     reg rst;
@@ -202,6 +203,36 @@ module tb_adapter;
         rst = 0;
         repeat (4) @(posedge clk);
         run_pair(pack_be32(32'd10), CTRL_PART_A, "host BE write_int(10)");
+
+        // --- Part B (control[3]=1, sample expects loops_b == 6) ---
+        rst = 1;
+        repeat (4) @(posedge clk);
+        rst = 0;
+        repeat (4) @(posedge clk);
+        control = CTRL_PART_B;
+
+        run_pair(pack_le32(32'd0), CTRL_PART_B, "B prime 0 #1");
+        run_pair(pack_le32(32'd0), CTRL_PART_B, "B prime 0 #2");
+        run_pair(pack_le32(32'd0), CTRL_PART_B, "B prime 0 #3");
+        run_pair(pack_le32(-68), CTRL_PART_B, "B L68");
+        run_pair(pack_le32(-30), CTRL_PART_B, "B L30");
+        run_pair(pack_le32(48), CTRL_PART_B, "B R48");
+        run_pair(pack_le32(-5), CTRL_PART_B, "B L5");
+        run_pair(pack_le32(60), CTRL_PART_B, "B R60");
+        run_pair(pack_le32(-55), CTRL_PART_B, "B L55");
+        run_pair(pack_le32(-1), CTRL_PART_B, "B L1");
+        run_pair(pack_le32(-99), CTRL_PART_B, "B L99");
+        run_pair(pack_le32(14), CTRL_PART_B, "B R14");
+        run_pair(pack_le32(-82), CTRL_PART_B, "B L82");
+        run_pair(pack_le32(32'd0), CTRL_PART_B, "B drain 0 #1");
+        run_pair(pack_le32(32'd0), CTRL_PART_B, "B drain 0 #2");
+        repeat (64) @(posedge clk);
+
+        if (adp_dout[31:0] !== 32'd6) begin
+            $display("FAIL Part B final: adp_dout[31:0]=%0d expected 6", adp_dout[31:0]);
+            errors = errors + 1;
+        end else
+            $display("PASS Part B final loops_b=%0d", adp_dout[31:0]);
 
         if (errors == 0)
             $display("ALL TESTS PASSED");

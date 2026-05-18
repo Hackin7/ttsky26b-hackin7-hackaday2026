@@ -8,10 +8,15 @@ from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles
 
 from golden_aoc import EXPECTED_INPUT_SAMPLE, expected_count, parse_line
-from tt_bus import read_loop_count_a, reset_dut, run_step
-
-# Badge solve.py ends setup with set_mode(0,0,1) -> control[2]=1 (position / stream mode)
-CONTROL_PART_A = 0b00100
+from golden_aoc_b import EXPECTED_INPUT_SAMPLE_B, expected_count_b
+from tt_bus import (
+    CONTROL_PART_A,
+    CONTROL_PART_B,
+    read_loop_count_a,
+    read_result32,
+    reset_dut,
+    run_step,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "input_sample.txt"
 
@@ -21,19 +26,15 @@ def test_golden_self_check() -> None:
     assert expected_count(FIXTURE) == EXPECTED_INPUT_SAMPLE
 
 
-@cocotb.test()
-async def test_input_sample_matches_golden(dut):
-    expected = expected_count(FIXTURE)
-    assert expected == EXPECTED_INPUT_SAMPLE
-    dut._log.info("Golden expected loop count: %d", expected)
+def test_golden_b_self_check() -> None:
+    """Pure Python: part B golden matches frozen reference."""
+    assert expected_count_b(FIXTURE) == EXPECTED_INPUT_SAMPLE_B
 
-    clock = Clock(dut.clk, 10, unit="us")
-    cocotb.start_soon(clock.start())
 
-    await reset_dut(dut)
-
+async def _run_input_sample(dut, control: int) -> int:
+    """Drive fixture with given control on every step; return port-read result."""
     for _ in range(3):
-        await run_step(dut, 0, control=CONTROL_PART_A, settle_cycles=64)
+        await run_step(dut, 0, control=control, settle_cycles=64)
 
     with open(FIXTURE) as f:
         for line in f:
@@ -41,13 +42,39 @@ async def test_input_sample_matches_golden(dut):
                 continue
             value = parse_line(line)
             dut._log.info("Step value=%d", value)
-            await run_step(dut, value, control=CONTROL_PART_A, settle_cycles=64)
+            await run_step(dut, value, control=control, settle_cycles=64)
 
-    await run_step(dut, 0, control=CONTROL_PART_A, settle_cycles=64)
-    await run_step(dut, 0, control=CONTROL_PART_A, settle_cycles=64)
-
+    await run_step(dut, 0, control=control, settle_cycles=64)
+    await run_step(dut, 0, control=control, settle_cycles=64)
     await ClockCycles(dut.clk, 64)
+    return await read_result32(dut)
 
-    actual = await read_loop_count_a(dut)
-    dut._log.info("RTL calc_num_loops_a=%d, golden=%d", actual, expected)
+
+@cocotb.test()
+async def test_input_sample_matches_golden(dut):
+    expected = expected_count(FIXTURE)
+    assert expected == EXPECTED_INPUT_SAMPLE
+    dut._log.info("Golden expected loop count (A): %d", expected)
+
+    clock = Clock(dut.clk, 10, unit="us")
+    cocotb.start_soon(clock.start())
+    await reset_dut(dut)
+
+    actual = await _run_input_sample(dut, CONTROL_PART_A)
+    dut._log.info("RTL loops_a=%d, golden=%d", actual, expected)
     assert actual == expected, f"RTL {actual} != golden {expected}"
+
+
+@cocotb.test()
+async def test_input_sample_part_b_matches_golden(dut):
+    expected = expected_count_b(FIXTURE)
+    assert expected == EXPECTED_INPUT_SAMPLE_B
+    dut._log.info("Golden expected loop count (B): %d", expected)
+
+    clock = Clock(dut.clk, 10, unit="us")
+    cocotb.start_soon(clock.start())
+    await reset_dut(dut)
+
+    actual = await _run_input_sample(dut, CONTROL_PART_B)
+    dut._log.info("RTL loops_b=%d, golden=%d", actual, expected)
+    assert actual == expected, f"RTL {actual} != golden B {expected}"

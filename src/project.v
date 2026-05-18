@@ -6,7 +6,7 @@
  * --- Load / compute phase (ui_in[7] = 0) ---
  * ui_in[0]    byte_strobe  - latch uio_in into din[byte_idx*8 +: 8], advance index
  * ui_in[1]    compute      - pulse din_valid for one cycle (after 16 bytes loaded)
- * ui_in[6:2]  control[4:0]
+ * ui_in[6:2]  control[4:0]  (latched on compute; held for dout capture — bit 3 selects A vs B)
  * uio_in[7:0] data byte
  * uo_out[7:0] = {7'b0, result_valid}  (status only)
  *
@@ -47,14 +47,20 @@ module tt_um_hackin7_coprocessor (
 
     reg          result_valid;
     reg  [31:0]  result_reg;
+    reg  [4:0]   control_latch;
+
+    // dout_valid fires the cycle after compute; ui_in is already cleared then.
+    // Latch control on compute so the coprocessor dout mux still selects A vs B.
+    wire [4:0] control_cp = compute ? control : control_latch;
 
     always @(posedge clk) begin
         if (rst) begin
-            byte_idx     <= 4'd0;
-            din_reg      <= 128'd0;
-            din_valid    <= 1'b0;
-            result_valid <= 1'b0;
-            result_reg   <= 32'd0;
+            byte_idx      <= 4'd0;
+            din_reg       <= 128'd0;
+            din_valid     <= 1'b0;
+            result_valid  <= 1'b0;
+            result_reg    <= 32'd0;
+            control_latch <= 5'd0;
         end else begin
             din_valid <= 1'b0;
 
@@ -64,8 +70,9 @@ module tt_um_hackin7_coprocessor (
             end
 
             if (compute) begin
-                din_valid <= 1'b1;
-                byte_idx  <= 4'd0;
+                din_valid     <= 1'b1;
+                byte_idx      <= 4'd0;
+                control_latch <= control;
             end
 
             if (dout_valid_cp) begin
@@ -80,7 +87,7 @@ module tt_um_hackin7_coprocessor (
         .rst        (rst),
         .din        (din_reg),
         .din_valid  (din_valid),
-        .control    (control),
+        .control    (control_cp),
         .dout       (dout),
         .dout_valid (dout_valid_cp)
     );

@@ -6,6 +6,10 @@ from __future__ import annotations
 
 from cocotb.triggers import ClockCycles, RisingEdge
 
+# Badge solve.py after setup() + part_b_enable(1): control[2]=1, control[3]=1
+CONTROL_PART_A = 0b00100
+CONTROL_PART_B = 0b01100
+
 
 def pack_step(value: int) -> bytes:
     """16-byte frame: signed 32-bit step in din[31:0] (strobe byte 0 -> din[7:0])."""
@@ -65,6 +69,7 @@ async def read_result_byte(dut, byte_sel: int) -> int:
 async def read_result32(dut) -> int:
     """Read full 32-bit result_reg via 4-cycle uo_out port read.
 
+    Reflects whichever counter was muxed on the last compute (control[3] in that step).
     Requires result_valid (uo_out[0] in idle mode) to be set first.
     Assembles bytes little-endian: byte_sel 0 = LSB, 3 = MSB.
     """
@@ -81,3 +86,6 @@ async def read_result32(dut) -> int:
 async def read_loop_count_a(dut) -> int:
     """Read part-A loop counter via 4-cycle uo_out port read (works in RTL and GL)."""
     return await read_result32(dut)
+
+
+read_loop_count_b = read_result32
